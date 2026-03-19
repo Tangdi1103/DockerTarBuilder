@@ -1,0 +1,69 @@
+name: Build-AMD64-Docker-Images-Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: '请填写build后的镜像名'
+        required: true
+        default: 'alpine:latest'
+      dockerfile:
+        description: 'Dockerfile 文件名'
+        required: true
+        default: 'Dockerfile.base'
+
+jobs:
+  build_and_package:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Build Images and Package
+        run: |
+          IMAGE_NAME_AND_TAG="${{ github.event.inputs.image_name }}"
+          DOCKERFILE="${{ github.event.inputs.dockerfile }}"
+          
+          echo "Building image: ${IMAGE_NAME_AND_TAG}"
+          
+          # 构建镜像
+          docker build --platform "linux/amd64" -t "${IMAGE_NAME_AND_TAG}" -f "${DOCKERFILE}" .
+
+          image_name="${IMAGE_NAME_AND_TAG//\//_}"
+          image_name="${image_name//:/_}"
+          docker save "${IMAGE_NAME_AND_TAG}" -o "${image_name}-amd64.tar"
+          gzip -c "${image_name}-amd64.tar" > "${image_name}-amd64.tar.gz"
+          rm "${image_name}-amd64.tar"
+
+      - name: List generated files (debug step)
+        run: |
+          echo "Preparing docker images list (.tar.gz) files:"
+          find $GITHUB_WORKSPACE -name "*.tar.gz"
+          release_name=$(TZ="Asia/Shanghai" date +'%Y-%m-%d %H:%M Build')
+          echo "RELEASE_NAME=$release_name" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@master
+        with:
+          tag_name: DockerTarBuilder-AMD64
+          name: ${{ env.RELEASE_NAME }} for x86-64
+          body: |
+            [![Github](https://img.shields.io/badge/RELEASE:DockerTarBuilder-123456?logo=github&logoColor=fff&labelColor=green&style=for-the-badge)](https://www.bilibili.com/video/BV1EZ421M7mL) [![Github](https://img.shields.io/badge/国内加速站下载-FC7C0D?logo=github&logoColor=fff&labelColor=000&style=for-the-badge)](https://wkdaily.cpolar.top/archives/1)
+            ### How to use? For example
+            `docker load -i alpine_latest.tar.gz `
+            ### Video teaching
+            [![Bilibili](https://img.shields.io/badge/Bilibili-123456?logo=bilibili&logoColor=fff&labelColor=fb7299)](https://www.bilibili.com/video/BV1yyq6YREdF)
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Docker images as release assets
+        uses: softprops/action-gh-release@v2.1.0
+        with:
+          tag_name: DockerTarBuilder-AMD64
+          files: ${{ github.workspace }}/*.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
